@@ -3,6 +3,14 @@ plugins {
     id 'maven-publish'
 }
 
+// When built by a release workflow, publish under the release tag (v1.0.1 -> 1.0.1) so each release is
+// a distinct, immutable version (GitHub Packages rejects re-publishing the same one). Otherwise fall
+// back to the gradle.properties version.
+def releaseTag = System.getenv('GITHUB_REF_NAME')
+if (releaseTag != null && releaseTag.matches('v?\\d+(\\.\\d+)*')) {
+    version = releaseTag.replaceFirst(/^v/, '')
+}
+
 repositories {
     mavenCentral()
 }
