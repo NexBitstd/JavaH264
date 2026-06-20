@@ -8,6 +8,7 @@ import dev.nexbit.javah264.exception.UnknownPlatformException;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -54,6 +55,46 @@ public class JavaH264Test {
             atLeastOneFrameDecoded |= decoder.flushRemainingRGBA().length != 0;
         }
         assertTrue(atLeastOneFrameDecoded);
+    }
+
+    @Test
+    @DisplayName("Decode into a direct ByteBuffer (zero-copy)")
+    void decodeIntoByteBuffer() throws IOException, UnknownPlatformException {
+        byte[] h264data;
+        try (InputStream in = JavaH264Test.class.getClassLoader().getResourceAsStream("multi_512x512.h264")) {
+            h264data = readAllBytes(Objects.requireNonNull(in));
+        }
+        ByteBuffer dst = ByteBuffer.allocateDirect(512 * 512 * 4);
+        boolean atLeastOneFrameDecoded = false;
+        try (H264Decoder decoder = new H264Decoder()) {
+            for (byte[] nalUnit : H264Decoder.nalUnits(h264data)) {
+                DecodeResult result = decoder.decodeRGBAInto(nalUnit, dst);
+                if (result != null) {
+                    atLeastOneFrameDecoded = true;
+                    assertEquals(512, result.getWidth());
+                    assertEquals(512, result.getHeight());
+                    assertNull(result.getImage(), "image must live in the ByteBuffer, not a Java array");
+                    boolean anyNonZero = false;
+                    for (int i = 0; i < dst.capacity(); i++) {
+                        if (dst.get(i) != 0) {
+                            anyNonZero = true;
+                            break;
+                        }
+                    }
+                    assertTrue(anyNonZero, "ByteBuffer should contain decoded pixels");
+                }
+            }
+        }
+        assertTrue(atLeastOneFrameDecoded);
+        // A too-small direct buffer must be rejected, not corrupt memory.
+        try (H264Decoder decoder = new H264Decoder()) {
+            ByteBuffer tooSmall = ByteBuffer.allocateDirect(16);
+            assertThrows(IllegalArgumentException.class, () -> {
+                for (byte[] nalUnit : H264Decoder.nalUnits(h264data)) {
+                    decoder.decodeRGBAInto(nalUnit, tooSmall);
+                }
+            });
+        }
     }
 
     private static byte[] readAllBytes(InputStream inputStream) throws IOException {

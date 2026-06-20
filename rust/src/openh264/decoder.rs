@@ -1,5 +1,5 @@
 use jni::JNIEnv;
-use jni::objects::{JByteArray, JClass, JObject, JObjectArray, JValue};
+use jni::objects::{JByteArray, JByteBuffer, JClass, JObject, JObjectArray, JValue};
 use jni::sys::{jint, jlong, jsize};
 use openh264::decoder::{DecodedYUV, Decoder, DecoderConfig, Flush};
 use openh264::{nal_units, OpenH264API};
@@ -55,6 +55,47 @@ pub extern "C" fn Java_dev_nexbit_javah264_H264Decoder_decodeRGB0<'a>(
     decode_and_construct(&mut env, ptr, packet, 3, |f, b| {
         f.write_rgb8(b)
     })
+}
+
+#[no_mangle]
+pub extern "C" fn Java_dev_nexbit_javah264_H264Decoder_decodeRGBAInto0<'a>(
+    mut env: JNIEnv<'a>,
+    _: JClass<'a>,
+    ptr: jlong,
+    packet: JByteArray<'a>,
+    dst: JByteBuffer<'a>,
+) -> JObject<'a> {
+    let decoder = unsafe { &mut *(ptr as *mut Decoder) };
+    let bytes = jni_unwrap!(&mut env, env.convert_byte_array(packet), JObject::null(), "Failed to convert java array");
+    let decoded = match decoder.decode(&*bytes) {
+        Ok(Some(d)) => d,
+        Ok(None) => return JObject::null(),
+        Err(_) => return JObject::null(),
+    };
+    let (width, height) = decoded.dimensions();
+    let needed = width * height * 4;
+    let capacity = jni_unwrap!(&mut env, env.get_direct_buffer_capacity(&dst), JObject::null(), "dst is not a direct ByteBuffer");
+    if capacity < needed {
+        throw_illegal_argument_exception(&mut env, format!("dst capacity {} < required {}", capacity, needed));
+        return JObject::null();
+    }
+    let addr = jni_unwrap!(&mut env, env.get_direct_buffer_address(&dst), JObject::null(), "Failed to access dst address");
+    // SAFETY: the JNI direct-buffer address is valid for `capacity` bytes; we write exactly `needed`
+    // (<= capacity) of them, and `out` does not outlive this call.
+    let out = unsafe { std::slice::from_raw_parts_mut(addr, needed) };
+    decoded.write_rgba8(out);
+    let timestamp = decoded.timestamp().as_millis() as i64;
+    let result_class = jni_unwrap!(&mut env, env.find_class("dev/nexbit/javah264/DecodeResult"), JObject::null(), "Failed find result class");
+    jni_unwrap!(&mut env, env.new_object(
+        &result_class,
+        "(IIJ[B)V",
+        &[
+            JValue::from(width as i32),
+            JValue::from(height as i32),
+            JValue::from(timestamp),
+            JValue::Object(&JObject::null()),
+        ],
+    ), JObject::null(), "Failed to create return object")
 }
 
 fn decode_and_construct<'a>(

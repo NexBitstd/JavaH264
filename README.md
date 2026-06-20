@@ -14,6 +14,8 @@ See [LICENSE](LICENSE) (MIT + the bundled Cisco OpenH264 BSD notice).
   (this was a use-after-free that could crash the JVM).
 - **Panic safety:** every `unwrap()`/`expect()` on the JNI boundary now throws a Java exception instead
   of panicking — under `panic = "abort"` a panic would take down the whole JVM.
+- **Zero-copy decode:** `H264Decoder.decodeRGBAInto(byte[], ByteBuffer)` writes the decoded pixels
+  straight into a caller-provided direct `ByteBuffer`, avoiding a fresh Java array allocation per frame.
 - Published under `dev.nexbit:javah264` (see below).
 
 ## Usage

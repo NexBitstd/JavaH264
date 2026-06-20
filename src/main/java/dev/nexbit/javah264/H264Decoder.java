@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import dev.nexbit.javah264.exception.UnknownPlatformException;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -49,6 +50,29 @@ public class H264Decoder implements AutoCloseable {
         try {
             assertNotClosed();
             return decodeRGB0(pointer, packet);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /**
+     * Decodes one packet, writing the RGBA pixels straight into {@code dst} instead of allocating a
+     * fresh Java array per frame. {@code dst} must be a direct {@link ByteBuffer} with at least
+     * {@code width * height * 4} bytes; pixels are written from index 0. The returned
+     * {@link DecodeResult} carries the dimensions and timestamp, while {@link DecodeResult#getImage()}
+     * is {@code null} — the image lives in {@code dst}. Returns {@code null} if no frame was produced.
+     */
+    @Nullable
+    public DecodeResult decodeRGBAInto(byte[] packet, ByteBuffer dst) {
+        Objects.requireNonNull(packet, "packet");
+        Objects.requireNonNull(dst, "dst");
+        if (!dst.isDirect()) {
+            throw new IllegalArgumentException("dst must be a direct ByteBuffer");
+        }
+        lock.readLock().lock();
+        try {
+            assertNotClosed();
+            return decodeRGBAInto0(pointer, packet, dst);
         } finally {
             lock.readLock().unlock();
         }
@@ -104,6 +128,8 @@ public class H264Decoder implements AutoCloseable {
     private static native DecodeResult decodeRGBA0(long pointer, byte[] packet);
 
     private static native DecodeResult decodeRGB0(long pointer, byte[] packet);
+
+    private static native DecodeResult decodeRGBAInto0(long pointer, byte[] packet, ByteBuffer dst);
 
     public static native DecodeResult[] flushRemainingRGBA0(long pointer);
 
