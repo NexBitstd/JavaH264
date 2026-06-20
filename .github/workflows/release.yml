@@ -111,6 +111,8 @@ jobs:
           path: ./rust/target/aarch64-unknown-linux-gnu/release/libjavah264.so
 
   build-macos-x86-64:
+    # macos-14 is arm64, so the x86_64 dylib must be cross-compiled (a plain `cargo build` here would
+    # produce an arm64 binary mislabelled as x86_64). nasm assembles openh264's x86 SIMD.
     runs-on: macos-14
     defaults:
       run:
@@ -118,21 +120,19 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Download and extract MacOS SDK
-        run: |
-          mkdir -p sdk
-          cd sdk
-          wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX10.14.sdk.tar.xz
-          tar -xJf MacOSX10.14.sdk.tar.xz
+      - name: Install nasm
+        run: brew install nasm
+      - name: Add x86_64 target
+        run: rustup target add x86_64-apple-darwin
       - name: Cargo build
-        run: |
-          SDKROOT=$(pwd)/sdk/MacOSX10.14.sdk/ MACOSX_DEPLOYMENT_TARGET=10.14 cargo build --release --lib
+        run: MACOSX_DEPLOYMENT_TARGET=11.0 cargo build --release --lib --target x86_64-apple-darwin
       - uses: actions/upload-artifact@v4
         with:
           name: javah264-macos-x86-64
-          path: ./rust/target/release/libjavah264.dylib
+          path: ./rust/target/x86_64-apple-darwin/release/libjavah264.dylib
 
   build-macos-aarch64:
+    # macos-14 is an Apple-Silicon (arm64) runner, so the aarch64 dylib builds natively.
     runs-on: macos-14
     defaults:
       run:
@@ -140,21 +140,12 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      - name: Download and extract MacOS SDK
-        run: |
-          mkdir -p sdk
-          cd sdk
-          wget https://github.com/phracker/MacOSX-SDKs/releases/download/11.3/MacOSX11.0.sdk.tar.xz
-          tar -xJf MacOSX11.0.sdk.tar.xz
       - name: Cargo build
-        run: |
-          cargo install cargo-xbuild
-          rustup target add aarch64-apple-darwin
-          SDKROOT=$(pwd)/sdk/MacOSX11.0.sdk/ MACOSX_DEPLOYMENT_TARGET=11.0 cargo build --target=aarch64-apple-darwin --release --lib
+        run: MACOSX_DEPLOYMENT_TARGET=11.0 cargo build --release --lib
       - uses: actions/upload-artifact@v4
         with:
           name: javah264-macos-aarch64
-          path: ./rust/target/aarch64-apple-darwin/release/libjavah264.dylib
+          path: ./rust/target/release/libjavah264.dylib
 
   build-windows-x86-64:
     runs-on: windows-2025
