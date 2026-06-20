@@ -1,9 +1,9 @@
-package ru.dimaskama.javah264;
+package dev.nexbit.javah264;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import ru.dimaskama.javah264.exception.EncoderException;
-import ru.dimaskama.javah264.exception.UnknownPlatformException;
+import dev.nexbit.javah264.exception.EncoderException;
+import dev.nexbit.javah264.exception.UnknownPlatformException;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

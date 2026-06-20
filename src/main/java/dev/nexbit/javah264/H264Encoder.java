@@ -1,15 +1,20 @@
-package ru.dimaskama.javah264;
+package dev.nexbit.javah264;
 
 import org.jetbrains.annotations.Nullable;
-import ru.dimaskama.javah264.exception.EncoderException;
-import ru.dimaskama.javah264.exception.UnknownPlatformException;
+import dev.nexbit.javah264.exception.EncoderException;
+import dev.nexbit.javah264.exception.UnknownPlatformException;
 
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class H264Encoder implements AutoCloseable {
 
     private final AtomicBoolean closed = new AtomicBoolean();
+    // Guards the native pointer: encode takes the read lock, close takes the write lock, so the native
+    // encoder is never freed while an encode is in flight on another thread (use-after-free / JVM crash).
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final long pointer;
 
     public H264Encoder() throws IOException, UnknownPlatformException {
@@ -45,27 +50,47 @@ public class H264Encoder implements AutoCloseable {
     }
 
     public byte[] encodeRGBA(int width, int height, byte[] rgba) throws EncoderException {
-        assertNotClosed();
         checkDims(width, height, 4, rgba.length);
-        return encodeRGBA0(pointer, width, height, rgba);
+        lock.readLock().lock();
+        try {
+            assertNotClosed();
+            return encodeRGBA0(pointer, width, height, rgba);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public byte[] encodeRGB(int width, int height, byte[] rgb) throws EncoderException {
-        assertNotClosed();
         checkDims(width, height, 3, rgb.length);
-        return encodeRGB0(pointer, width, height, rgb);
+        lock.readLock().lock();
+        try {
+            assertNotClosed();
+            return encodeRGB0(pointer, width, height, rgb);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public byte[][] encodeSeparateRGBA(int width, int height, byte[] rgba) throws EncoderException {
-        assertNotClosed();
         checkDims(width, height, 4, rgba.length);
-        return encodeSeparateRGBA0(pointer, width, height, rgba);
+        lock.readLock().lock();
+        try {
+            assertNotClosed();
+            return encodeSeparateRGBA0(pointer, width, height, rgba);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public byte[][] encodeSeparateRGB(int width, int height, byte[] rgb) throws EncoderException {
-        assertNotClosed();
         checkDims(width, height, 3, rgb.length);
-        return encodeSeparateRGB0(pointer, width, height, rgb);
+        lock.readLock().lock();
+        try {
+            assertNotClosed();
+            return encodeSeparateRGB0(pointer, width, height, rgb);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     private void checkDims(int width, int height, int pixelLen, int dataLength) {
@@ -95,7 +120,13 @@ public class H264Encoder implements AutoCloseable {
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
-            destroyEncoder0(pointer);
+            // Wait for any in-flight encode to finish before freeing the native encoder.
+            lock.writeLock().lock();
+            try {
+                destroyEncoder0(pointer);
+            } finally {
+                lock.writeLock().unlock();
+            }
         }
     }
 

@@ -1,6 +1,6 @@
-package ru.dimaskama.javah264;
+package dev.nexbit.javah264;
 
-import ru.dimaskama.javah264.exception.UnknownPlatformException;
+import dev.nexbit.javah264.exception.UnknownPlatformException;
 
 import java.io.File;
 import java.io.IOException;

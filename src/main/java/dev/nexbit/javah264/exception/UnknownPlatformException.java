@@ -1,4 +1,4 @@
-package ru.dimaskama.javah264.exception;
+package dev.nexbit.javah264.exception;
 
 public class UnknownPlatformException extends Exception {
 

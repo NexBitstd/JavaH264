@@ -4,10 +4,10 @@ use jni::sys::{jboolean, jbyte, jfloat, jint, jlong, jshort, jsize};
 use openh264::encoder::{BitRate, Complexity, Encoder, EncoderConfig, FrameRate, IntraFramePeriod, Level, Profile, QpRange, RateControlMode, SpsPpsStrategy, UsageType};
 use openh264::formats::{RgbSliceU8, RgbaSliceU8, YUVBuffer};
 use openh264::{OpenH264API};
-use crate::openh264::exceptions::{throw_encoder_exception, throw_illegal_argument_exception, throw_runtime_exception};
+use crate::openh264::exceptions::{jni_unwrap, throw_encoder_exception, throw_illegal_argument_exception, throw_runtime_exception};
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Encoder_createEncoder0(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Encoder_createEncoder0(
     mut env: JNIEnv,
     _: JClass,
     enable_skip_frame: jboolean,
@@ -143,7 +143,7 @@ pub extern "C" fn Java_ru_dimaskama_javah264_H264Encoder_createEncoder0(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Encoder_encodeRGBA0<'a>(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Encoder_encodeRGBA0<'a>(
     mut env: JNIEnv<'a>,
     _: JClass<'a>,
     ptr: jlong,
@@ -157,7 +157,7 @@ pub extern "C" fn Java_ru_dimaskama_javah264_H264Encoder_encodeRGBA0<'a>(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Encoder_encodeRGB0<'a>(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Encoder_encodeRGB0<'a>(
     mut env: JNIEnv<'a>,
     _: JClass<'a>,
     ptr: jlong,
@@ -190,7 +190,7 @@ fn encode_and_construct<'a>(
     match encoder.encode(&yuv_source) {
         Ok(bitstream) => {
             let vec = bitstream.to_vec();
-            env.byte_array_from_slice(&vec).unwrap()
+            jni_unwrap!(env, env.byte_array_from_slice(&vec), JByteArray::default(), "Failed to convert encoded frame to java array")
         }
         Err(err) => {
             throw_encoder_exception(env, format!("Failed to encode: {}", err));
@@ -200,7 +200,7 @@ fn encode_and_construct<'a>(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Encoder_encodeSeparateRGBA0<'a>(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Encoder_encodeSeparateRGBA0<'a>(
     mut env: JNIEnv<'a>,
     _: JClass<'a>,
     ptr: jlong,
@@ -214,7 +214,7 @@ pub extern "C" fn Java_ru_dimaskama_javah264_H264Encoder_encodeSeparateRGBA0<'a>
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Encoder_encodeSeparateRGB0<'a>(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Encoder_encodeSeparateRGB0<'a>(
     mut env: JNIEnv<'a>,
     _: JClass<'a>,
     ptr: jlong,
@@ -248,9 +248,15 @@ fn encode_and_construct_separate<'a>(
         Ok(bitstream) => {
             let mut nal_unit_vec: Vec<JByteArray> = vec![];
             for l in 0..bitstream.num_layers() {
-                let layer = bitstream.layer(l).unwrap();
+                let layer = match bitstream.layer(l) {
+                    Some(layer) => layer,
+                    None => continue,
+                };
                 for n in 0..layer.nal_count() {
-                    let nal = layer.nal_unit(n).unwrap();
+                    let nal = match layer.nal_unit(n) {
+                        Some(nal) => nal,
+                        None => continue,
+                    };
                     match env.byte_array_from_slice(&nal) {
                         Ok(arr) => {
                             nal_unit_vec.push(arr)
@@ -262,10 +268,10 @@ fn encode_and_construct_separate<'a>(
                     }
                 }
             }
-            let byte_array_class = env.find_class("[B").expect("Couldn't find byte[] class");
-            let return_array = env.new_object_array(nal_unit_vec.len() as jsize, byte_array_class, JObject::null()).unwrap();
+            let byte_array_class = jni_unwrap!(env, env.find_class("[B"), JObjectArray::default(), "Couldn't find byte[] class");
+            let return_array = jni_unwrap!(env, env.new_object_array(nal_unit_vec.len() as jsize, byte_array_class, JObject::null()), JObjectArray::default(), "Failed to allocate NAL array");
             for (i, item) in nal_unit_vec.into_iter().enumerate() {
-                env.set_object_array_element(&return_array, i as i32, item).expect("Couldn't set array element");
+                jni_unwrap!(env, env.set_object_array_element(&return_array, i as i32, item), JObjectArray::default(), "Failed to set NAL array element");
             };
             return_array
         }
@@ -277,7 +283,7 @@ fn encode_and_construct_separate<'a>(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Encoder_destroyEncoder0(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Encoder_destroyEncoder0(
     _: JNIEnv,
     _: JClass,
     ptr: jlong

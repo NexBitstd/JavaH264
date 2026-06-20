@@ -1,4 +1,4 @@
-package ru.dimaskama.javah264;
+package dev.nexbit.javah264;
 
 public class DecodeResult {
 

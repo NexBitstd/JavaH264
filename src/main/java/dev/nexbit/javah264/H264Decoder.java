@@ -1,15 +1,20 @@
-package ru.dimaskama.javah264;
+package dev.nexbit.javah264;
 
 import org.jetbrains.annotations.Nullable;
-import ru.dimaskama.javah264.exception.UnknownPlatformException;
+import dev.nexbit.javah264.exception.UnknownPlatformException;
 
 import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class H264Decoder implements AutoCloseable {
 
     private final AtomicBoolean closed = new AtomicBoolean();
+    // Guards the native pointer: decode/flush take the read lock, close takes the write lock, so the
+    // native decoder is never freed while a decode is in flight on another thread (use-after-free / JVM crash).
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
     private final long pointer;
 
     public H264Decoder() throws IOException, UnknownPlatformException {
@@ -27,24 +32,46 @@ public class H264Decoder implements AutoCloseable {
 
     @Nullable
     public DecodeResult decodeRGBA(byte[] packet) {
-        assertNotClosed();
-        return decodeRGBA0(pointer, Objects.requireNonNull(packet, "packet"));
+        Objects.requireNonNull(packet, "packet");
+        lock.readLock().lock();
+        try {
+            assertNotClosed();
+            return decodeRGBA0(pointer, packet);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     @Nullable
     public DecodeResult decodeRGB(byte[] packet) {
-        assertNotClosed();
-        return decodeRGB0(pointer, Objects.requireNonNull(packet, "packet"));
+        Objects.requireNonNull(packet, "packet");
+        lock.readLock().lock();
+        try {
+            assertNotClosed();
+            return decodeRGB0(pointer, packet);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public DecodeResult[] flushRemainingRGBA() {
-        assertNotClosed();
-        return flushRemainingRGBA0(pointer);
+        lock.readLock().lock();
+        try {
+            assertNotClosed();
+            return flushRemainingRGBA0(pointer);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     public DecodeResult[] flushRemainingRGB() {
-        assertNotClosed();
-        return flushRemainingRGB0(pointer);
+        lock.readLock().lock();
+        try {
+            assertNotClosed();
+            return flushRemainingRGB0(pointer);
+        } finally {
+            lock.readLock().unlock();
+        }
     }
 
     private void assertNotClosed() {
@@ -56,7 +83,13 @@ public class H264Decoder implements AutoCloseable {
     @Override
     public void close() {
         if (closed.compareAndSet(false, true)) {
-            destroyDecoder0(pointer);
+            // Wait for any in-flight decode to finish before freeing the native decoder.
+            lock.writeLock().lock();
+            try {
+                destroyDecoder0(pointer);
+            } finally {
+                lock.writeLock().unlock();
+            }
         }
     }
 

@@ -43,3 +43,6 @@ bin/
 /.idea/
 /rust/target/
 /rust/.idea/
+
+### Native build artifacts (populated by CI per-platform, never committed) ###
+/src/main/resources/natives/*/

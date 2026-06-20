@@ -4,10 +4,10 @@ use jni::sys::{jint, jlong, jsize};
 use openh264::decoder::{DecodedYUV, Decoder, DecoderConfig, Flush};
 use openh264::{nal_units, OpenH264API};
 use openh264::formats::YUVSource;
-use crate::openh264::exceptions::{throw_illegal_argument_exception, throw_runtime_exception};
+use crate::openh264::exceptions::{jni_unwrap, throw_illegal_argument_exception, throw_runtime_exception};
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_createDecoder0(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Decoder_createDecoder0(
     mut env: JNIEnv,
     _: JClass,
     flush_behavior: jint
@@ -34,7 +34,7 @@ pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_createDecoder0(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_decodeRGBA0<'a>(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Decoder_decodeRGBA0<'a>(
     mut env: JNIEnv<'a>,
     _: JClass<'a>,
     ptr: jlong,
@@ -46,7 +46,7 @@ pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_decodeRGBA0<'a>(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_decodeRGB0<'a>(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Decoder_decodeRGB0<'a>(
     mut env: JNIEnv<'a>,
     _: JClass<'a>,
     ptr: jlong,
@@ -79,7 +79,7 @@ fn decode_and_construct<'a>(
         },
         Err(_) => {return JObject::null()},
     };
-    let result_class = match env.find_class("ru/dimaskama/javah264/DecodeResult") {
+    let result_class = match env.find_class("dev/nexbit/javah264/DecodeResult") {
         Ok(c) => c,
         Err(err) => {
             throw_runtime_exception(env, format!("Failed find result class: {}", err));
@@ -93,7 +93,7 @@ fn decode_and_construct<'a>(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_flushRemainingRGBA0<'a>(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Decoder_flushRemainingRGBA0<'a>(
     mut env: JNIEnv<'a>,
     _: JClass<'a>,
     ptr: jlong
@@ -104,7 +104,7 @@ pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_flushRemainingRGBA0<'a>
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_flushRemainingRGB0<'a>(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Decoder_flushRemainingRGB0<'a>(
     mut env: JNIEnv<'a>,
     _: JClass<'a>,
     ptr: jlong
@@ -121,7 +121,7 @@ fn flush_remaining_and_construct<'a>(
     write_fn: fn(&DecodedYUV, &mut [u8])
 ) -> JObjectArray<'a> {
     let decoder = unsafe { &mut *(ptr as *mut Decoder) };
-    let result_class = match env.find_class("ru/dimaskama/javah264/DecodeResult") {
+    let result_class = match env.find_class("dev/nexbit/javah264/DecodeResult") {
         Ok(c) => c,
         Err(err) => {
             throw_runtime_exception(env, format!("Failed find result class: {}", err));
@@ -130,11 +130,11 @@ fn flush_remaining_and_construct<'a>(
     };
     match decoder.flush_remaining() {
         Ok(v) => {
-            let return_array = env.new_object_array(v.len() as jsize, &result_class, JObject::null()).unwrap();
+            let return_array = jni_unwrap!(env, env.new_object_array(v.len() as jsize, &result_class, JObject::null()), JObjectArray::default(), "Failed to allocate result array");
             for (i, item) in v.iter().enumerate() {
                 match create_result(env, &result_class, &item, pixel_size, write_fn) {
                     Some(o) => {
-                        env.set_object_array_element(&return_array, i as i32, o).expect("Couldn't set array element");
+                        jni_unwrap!(env, env.set_object_array_element(&return_array, i as i32, o), JObjectArray::default(), "Failed to set result array element");
                     }
                     None => {return JObjectArray::default()}
                 }
@@ -142,7 +142,7 @@ fn flush_remaining_and_construct<'a>(
             return_array
         }
         Err(_) => {
-            env.new_object_array(0, result_class, JObject::null()).unwrap()
+            jni_unwrap!(env, env.new_object_array(0, result_class, JObject::null()), JObjectArray::default(), "Failed to allocate empty result array")
         }
     }
 }
@@ -183,7 +183,7 @@ fn create_result<'a>(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_destroyDecoder0(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Decoder_destroyDecoder0(
     _: JNIEnv,
     _: JClass,
     ptr: jlong
@@ -196,7 +196,7 @@ pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_destroyDecoder0(
 }
 
 #[no_mangle]
-pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_nalUnits0<'a>(
+pub extern "C" fn Java_dev_nexbit_javah264_H264Decoder_nalUnits0<'a>(
     mut env: JNIEnv<'a>,
     _: JClass<'a>,
     bitstream: JByteArray<'a>
@@ -220,10 +220,10 @@ pub extern "C" fn Java_ru_dimaskama_javah264_H264Decoder_nalUnits0<'a>(
             }
         }
     }
-    let byte_array_class = env.find_class("[B").expect("Couldn't find byte[] class");
-    let return_array = env.new_object_array(nal_unit_vec.len() as jsize, byte_array_class, JObject::null()).unwrap();
+    let byte_array_class = jni_unwrap!(&mut env, env.find_class("[B"), JObjectArray::default(), "Couldn't find byte[] class");
+    let return_array = jni_unwrap!(&mut env, env.new_object_array(nal_unit_vec.len() as jsize, byte_array_class, JObject::null()), JObjectArray::default(), "Failed to allocate NAL array");
     for (i, item) in nal_unit_vec.into_iter().enumerate() {
-        env.set_object_array_element(&return_array, i as i32, item).expect("Couldn't set array element");
+        jni_unwrap!(&mut env, env.set_object_array_element(&return_array, i as i32, item), JObjectArray::default(), "Failed to set NAL array element");
     };
     return_array
 }
