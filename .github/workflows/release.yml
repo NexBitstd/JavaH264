@@ -6,6 +6,11 @@ on:
       - created
   workflow_dispatch:
 
+env:
+  # Force HTTP/1.1 for cargo downloads — runners intermittently hit
+  # "[16] Error in the HTTP2 framing layer" while fetching crates, which fails the build.
+  CARGO_HTTP_MULTIPLEXING: "false"
+
 jobs:
 
   build-linux-x86-64:
@@ -183,7 +188,6 @@ jobs:
         uses: actions/checkout@v4
       - name: Cargo build
         run: |
-          cargo install cargo-xbuild
           rustup target add i686-pc-windows-msvc
           cargo build --target=i686-pc-windows-msvc --release --lib
       - uses: actions/upload-artifact@v4
