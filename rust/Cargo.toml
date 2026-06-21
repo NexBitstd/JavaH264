@@ -6,6 +6,8 @@ edition = "2021"
 [dependencies]
 jni = "0.21.1"
 openh264 = "0.8.1"
+nokhwa = { version = "0.10.11", features = ["input-native"] }
+image = { version = "0.25", default-features = false }
 
 [lib]
 crate-type = ["cdylib"]
@@ -17,3 +19,9 @@ opt-level = 3
 panic = "abort"
 strip = "symbols"
 debug = false
+
+# Vendored nokhwa with macOS fixes: compatible_camera_formats filter (avfoundation.rs) and BGRA
+# support for virtual cameras (nokhwa-bindings-macos). See vendor/ for the patched sources.
+[patch.crates-io]
+nokhwa = { path = "vendor/nokhwa" }
+nokhwa-bindings-macos = { path = "vendor/nokhwa-bindings-macos" }

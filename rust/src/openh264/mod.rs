@@ -1,3 +1,3 @@
 pub mod encoder;
 pub mod decoder;
-mod exceptions;
+pub(crate) mod exceptions;

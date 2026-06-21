@@ -16,6 +16,10 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      - name: Install camera build deps
+        # nokhwa's v4l2-sys-mit runs bindgen against linux/videodev2.h, so clang (libclang) and the
+        # V4L2 headers must be present.
+        run: sudo apt-get update && sudo apt-get install -y clang libv4l-dev
       - name: Cargo build
         run: |
           cargo build --release --lib
@@ -33,6 +37,9 @@ jobs:
       CARGO_TARGET_I686_UNKNOWN_LINUX_GNU_LINKER: i686-linux-gnu-gcc
       CC: i686-linux-gnu-gcc
       CXX: i686-linux-gnu-g++
+      # nokhwa's v4l2-sys-mit runs bindgen; point it at the i686 target so the generated V4L2 struct
+      # layouts match the cross target rather than the x86_64 host.
+      BINDGEN_EXTRA_CLANG_ARGS: "--target=i686-linux-gnu"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -45,7 +52,7 @@ jobs:
       - name: Install i686 cross-compilers
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-i686-linux-gnu g++-i686-linux-gnu
+          sudo apt-get install -y gcc-i686-linux-gnu g++-i686-linux-gnu clang libv4l-dev
       - name: Set i686 Cross-Compilation Env
         env:
           CARGO_TARGET_I686_UNKNOWN_LINUX_GNU_LINKER: i686-linux-gnu-gcc
@@ -81,13 +88,16 @@ jobs:
       CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
       CC: aarch64-linux-gnu-gcc
       CXX: aarch64-linux-gnu-g++
+      # nokhwa's v4l2-sys-mit runs bindgen; point it at the aarch64 target so the generated V4L2 struct
+      # layouts match the cross target rather than the x86_64 host.
+      BINDGEN_EXTRA_CLANG_ARGS: "--target=aarch64-linux-gnu"
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
       - name: Install aarch64 cross-compilers
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu clang libv4l-dev
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:

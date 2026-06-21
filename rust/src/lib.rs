@@ -1,3 +1,4 @@
+mod camera;
 mod openh264;
 
 // #[cfg(test)]
